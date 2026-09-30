@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="EV Tracker" />
+  <title>EV Efficiency Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1><span class="bolt" aria-hidden="true">⚡</span> EV Efficiency</h1>
+  </header>
+
+  <main>
+    <!-- LOG A TRIP -->
+    <section id="view-log" class="view active" aria-labelledby="tab-log">
+      <div class="card scan-card">
+        <label class="scan-btn" for="scan-input">
+          <span class="scan-icon" aria-hidden="true">📷</span>
+          <span>
+            <strong>Scan a screenshot</strong>
+            <small>Upload a screenshot of the Tesla Energy app or Trips card to fill in the form</small>
+          </span>
+        </label>
+        <input id="scan-input" type="file" accept="image/*" hidden />
+        <div id="scan-status" class="scan-status" hidden>
+          <img id="scan-preview" alt="Uploaded screenshot" />
+          <div class="scan-body">
+            <div id="scan-label" class="scan-label">Reading…</div>
+            <div class="progress"><div id="scan-bar"></div></div>
+            <ul id="scan-notes" class="notes"></ul>
+            <details id="scan-raw-wrap" hidden>
+              <summary>Text read from the image</summary>
+              <pre id="scan-raw"></pre>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <form id="trip-form" class="card" autocomplete="off" novalidate>
+        <div class="form-head">
+          <h2 id="form-title">Log a trip</h2>
+          <button type="button" id="cancel-edit" class="link-btn" hidden>Cancel edit</button>
+        </div>
+        <div class="grid-2">
+          <label>Date
+            <input type="date" name="date" required />
+          </label>
+          <label>Trip name <span class="opt">optional</span>
+            <input type="text" name="name" placeholder="Commute, Costco…" maxlength="60" />
+          </label>
+        </div>
+        <label>Miles driven
+          <input type="number" name="miles" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 42.3" required />
+        </label>
+        <div class="grid-2">
+          <label>Starting battery %
+            <input type="number" name="startPct" inputmode="numeric" step="1" min="0" max="100" placeholder="80" />
+          </label>
+          <label>Ending battery %
+            <input type="number" name="endPct" inputmode="numeric" step="1" min="0" max="100" placeholder="64" />
+          </label>
+        </div>
+        <label>Energy used (kWh) <span class="opt">optional if you entered both battery %</span>
+          <input type="number" name="energyKwh" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 10.8" />
+        </label>
+        <label>Notes <span class="opt">optional</span>
+          <input type="text" name="notes" placeholder="Cold morning, highway, AC on…" maxlength="200" />
+        </label>
+
+        <div id="live-results" class="results" aria-live="polite"></div>
+
+        <button type="submit" class="primary" id="save-btn">Save trip</button>
+      </form>
+    </section>
+
+    <!-- TRIPS -->
+    <section id="view-trips" class="view" aria-labelledby="tab-trips">
+      <div id="trip-list"></div>
+    </section>
+
+    <!-- SUMMARY -->
+    <section id="view-summary" class="view" aria-labelledby="tab-summary">
+      <div id="summary"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view" aria-labelledby="tab-settings">
+      <form id="settings-form" class="card" novalidate>
+        <h2>Vehicle</h2>
+        <label>Model <span class="opt">fills in the battery size</span>
+          <select id="preset"></select>
+        </label>
+        <label>Usable battery capacity (kWh)
+          <input type="number" name="batteryKwh" inputmode="decimal" step="0.1" min="1" />
+          <small class="hint">Used to turn battery % into kWh. The presets are estimates, and packs lose capacity as they age.</small>
+        </label>
+
+        <h2>Electricity</h2>
+        <label>Home electricity rate ($/kWh)
+          <input type="number" name="electricityRate" inputmode="decimal" step="0.001" min="0" />
+        </label>
+        <label>Charging efficiency (%)
+          <input type="number" name="chargingEfficiency" inputmode="numeric" step="1" min="50" max="100" />
+          <small class="hint">The share of energy from the wall that ends up in the battery. Level 2 home charging is usually 88–92%. Level 1 is closer to 80–85%.</small>
+        </label>
+
+        <h2>Gas car comparison</h2>
+        <div class="grid-2">
+          <label>Gas car MPG
+            <input type="number" name="gasMpg" inputmode="decimal" step="0.1" min="1" />
+          </label>
+          <label>Gas price ($/gal)
+            <input type="number" name="gasPrice" inputmode="decimal" step="0.01" min="0" />
+          </label>
+        </div>
+
+        <button type="submit" class="primary">Save settings</button>
+        <p class="hint">Each trip keeps the rates that were set when you saved it, so changing a rate later won't change your history.</p>
+        <button type="button" id="apply-all" class="secondary">Apply these rates to all existing trips</button>
+      </form>
+
+      <div class="card">
+        <h2>Your data</h2>
+        <p class="hint">Trips are saved only in this browser on this device. Export a backup regularly.</p>
+        <div class="btn-row">
+          <button type="button" id="export-csv" class="secondary">Export CSV</button>
+          <button type="button" id="export-json" class="secondary">Backup (JSON)</button>
+          <label class="secondary as-btn" for="import-json">Restore backup</label>
+          <input type="file" id="import-json" accept="application/json,.json" hidden />
+        </div>
+        <button type="button" id="clear-all" class="danger">Delete all trips</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" role="tablist">
+    <button role="tab" id="tab-log" data-view="log" aria-selected="true"><span aria-hidden="true">＋</span>Log</button>
+    <button role="tab" id="tab-trips" data-view="trips" aria-selected="false"><span aria-hidden="true">☰</span>Trips</button>
+    <button role="tab" id="tab-summary" data-view="summary" aria-selected="false"><span aria-hidden="true">Σ</span>Summary</button>
+    <button role="tab" id="tab-settings" data-view="settings" aria-selected="false"><span aria-hidden="true">⚙</span>Settings</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
